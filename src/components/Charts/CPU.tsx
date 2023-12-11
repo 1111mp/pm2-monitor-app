@@ -10,9 +10,9 @@ import {
   TooltipComponent,
   ToolboxComponent,
   GridComponent,
+  VisualMapComponent,
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
-import { swrApi } from "@/trpc/react";
 
 import type { EChartsOption } from "echarts";
 import type { CallbackDataParams } from "echarts/types/dist/shared";
@@ -23,21 +23,20 @@ echarts.use([
   TooltipComponent,
   ToolboxComponent,
   GridComponent,
+  VisualMapComponent,
   LineChart,
   CanvasRenderer,
 ]);
 
-export const Content: React.FC<{}> = () => {
+type Props = {
+  isLoading?: boolean;
+  data?: any;
+};
+
+export const CPU: React.FC<Props> = ({ isLoading = false, data }) => {
   const xDraft = useRef<number[]>();
   const yDraft = useRef<number[]>(new Array(61));
   const duration = useRef<number>(0);
-
-  const { data, isLoading } = swrApi.pm2.list.useSWR(undefined, {
-    refreshInterval: 1000,
-    revalidateOnFocus: false,
-  });
-
-  console.log("data", data);
 
   const xAxis = useMemo(() => {
     if (!data) return [];
@@ -67,9 +66,9 @@ export const Content: React.FC<{}> = () => {
     if (!data) return [];
 
     const { apps } = data;
-    const { monit } = apps[1]!;
+    const { monit } = apps[0]!;
 
-    yDraft.current.push(monit?.cpu!);
+    yDraft.current.push(monit.cpu);
     yDraft.current.shift();
 
     return [...yDraft.current];
@@ -82,8 +81,23 @@ export const Content: React.FC<{}> = () => {
       animationDuration: duration.current,
       animationDurationUpdate: duration.current,
       title: {
-        text: "CPU Usage",
+        text: `CPU Usage ${yData[yData.length - 1]}%`,
+        textStyle: {
+          color: "#999",
+        },
       },
+      visualMap: [
+        {
+          show: false,
+          type: "continuous",
+          seriesIndex: 0,
+          min: 0,
+          max: 100,
+          inRange: {
+            color: ["#006FEE", "#f5a524", "#f31260"],
+          },
+        },
+      ],
       tooltip: {
         trigger: "axis",
         formatter(params) {
@@ -98,11 +112,6 @@ export const Content: React.FC<{}> = () => {
         right: "4%",
         bottom: "3%",
         containLabel: true,
-      },
-      toolbox: {
-        feature: {
-          saveAsImage: {},
-        },
       },
       xAxis: {
         type: "category" as const,
@@ -128,10 +137,12 @@ export const Content: React.FC<{}> = () => {
         {
           type: "line",
           smooth: true,
-          // areaStyle: {},
-          itemStyle: {
-            color: "#333",
+          areaStyle: {
+            opacity: 0.3,
           },
+          // itemStyle: {
+          //   color: "#333",
+          // },
           data: yData,
         },
       ],

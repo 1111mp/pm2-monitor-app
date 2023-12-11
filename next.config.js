@@ -7,8 +7,9 @@ await import("./src/env.js");
 /** @type {import("next").NextConfig} */
 const config = {
   experimental: {
-    serverComponentsExternalPackages: ["pm2"],
+    serverComponentsExternalPackages: ["pm2", "swr"],
   },
+  reactStrictMode: false,
 };
 
 export default config;

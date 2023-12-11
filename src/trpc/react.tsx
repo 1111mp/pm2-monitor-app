@@ -3,12 +3,22 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { loggerLink, unstable_httpBatchStreamLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
+import { createSWRProxyHooks } from "@trpc-swr/client";
 import { useState } from "react";
 
 import { type AppRouter } from "@/server/api/root";
 import { getUrl, transformer } from "./shared";
 
 export const api = createTRPCReact<AppRouter>();
+
+export const swrApi = createSWRProxyHooks<AppRouter>({
+  transformer,
+  links: [
+    unstable_httpBatchStreamLink({
+      url: getUrl(),
+    }),
+  ],
+});
 
 export function TRPCReactProvider(props: {
   children: React.ReactNode;
@@ -17,7 +27,7 @@ export function TRPCReactProvider(props: {
   const [queryClient] = useState(() => new QueryClient());
 
   const [trpcClient] = useState(() =>
-    api.createClient({
+    swrApi.createClient({
       transformer,
       links: [
         loggerLink({
@@ -35,14 +45,12 @@ export function TRPCReactProvider(props: {
           },
         }),
       ],
-    })
+    }),
   );
 
   return (
     <QueryClientProvider client={queryClient}>
-      <api.Provider client={trpcClient} queryClient={queryClient}>
-        {props.children}
-      </api.Provider>
+      <swrApi.Provider client={trpcClient}>{props.children}</swrApi.Provider>
     </QueryClientProvider>
   );
 }

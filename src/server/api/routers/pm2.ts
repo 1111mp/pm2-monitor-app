@@ -1,3 +1,4 @@
+import { createReadStream } from "fs";
 import { z } from "zod";
 import pm2, { type ProcessDescription, type Proc } from "pm2";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
@@ -157,11 +158,24 @@ const killDaemon = middleware(
 // });
 
 export const pm2Router = createTRPCRouter({
-  list: publicProcedure.query(() => list()),
+  list: publicProcedure.query(async () => {
+    const apps = await list();
+    return {
+      timer: Date.now(),
+      apps,
+    };
+  }),
 
   describe: publicProcedure
     .input(z.string().or(z.number()))
-    .query(({ input }) => describe(input)),
+    .query(async ({ input }) => {
+      const apps = await describe(input);
+
+      return {
+        timer: Date.now(),
+        apps,
+      };
+    }),
 
   logs: publicProcedure
     .input(
@@ -169,6 +183,11 @@ export const pm2Router = createTRPCRouter({
     )
     .query(async ({ input }) => {
       const { pm_out_log_path, pm_err_log_path } = input;
+
+      return {
+        output: createReadStream(pm_out_log_path, { encoding: "utf-8" }),
+        error: createReadStream(pm_err_log_path, { encoding: "utf-8" }),
+      };
     }),
 
   stop: publicProcedure

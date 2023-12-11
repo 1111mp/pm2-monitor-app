@@ -10,12 +10,14 @@ import {
   TooltipComponent,
   ToolboxComponent,
   GridComponent,
+  VisualMapComponent,
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
-import { swrApi } from "@/trpc/react";
+import { parseKMToMB } from "./utils";
 
 import type { EChartsOption } from "echarts";
 import type { CallbackDataParams } from "echarts/types/dist/shared";
+import type { ProcessDescription } from "pm2";
 
 echarts.use([
   LegendComponent,
@@ -23,21 +25,23 @@ echarts.use([
   TooltipComponent,
   ToolboxComponent,
   GridComponent,
+  VisualMapComponent,
   LineChart,
   CanvasRenderer,
 ]);
 
-export const Content: React.FC<{}> = () => {
+type Props = {
+  isLoading?: boolean;
+  data?: {
+    timer: number;
+    apps: ProcessDescription[];
+  };
+};
+
+export const Memory: React.FC<Props> = ({ isLoading = false, data }) => {
   const xDraft = useRef<number[]>();
   const yDraft = useRef<number[]>(new Array(61));
   const duration = useRef<number>(0);
-
-  const { data, isLoading } = swrApi.pm2.list.useSWR(undefined, {
-    refreshInterval: 1000,
-    revalidateOnFocus: false,
-  });
-
-  console.log("data", data);
 
   const xAxis = useMemo(() => {
     if (!data) return [];
@@ -67,30 +71,52 @@ export const Content: React.FC<{}> = () => {
     if (!data) return [];
 
     const { apps } = data;
-    const { monit } = apps[1]!;
+    const { monit } = apps[0]!;
 
-    yDraft.current.push(monit?.cpu!);
+    yDraft.current.push(parseKMToMB(monit?.memory!));
     yDraft.current.shift();
 
     return [...yDraft.current];
   }, [data]);
 
-  const options: EChartsOption = useMemo(() => {
+  const options: EChartsOption | undefined = useMemo(() => {
+    if (!data) return {};
+
+    const { apps } = data;
+    const { pm2_env } = apps[0]!;
+    const { max_memory_restart } = pm2_env as any;
+    const max = max_memory_restart ? parseKMToMB(max_memory_restart) : 200;
+
     return {
       animationEasing: "linear",
       animationEasingUpdate: "linear",
       animationDuration: duration.current,
       animationDurationUpdate: duration.current,
       title: {
-        text: "CPU Usage",
+        text: `Memory Usage ${yData[yData.length - 1]}M`,
+        textStyle: {
+          color: "#999",
+        },
       },
+      visualMap: [
+        {
+          show: false,
+          type: "continuous",
+          seriesIndex: 0,
+          min: 0,
+          max,
+          inRange: {
+            color: ["#006FEE", "#f5a524", "#f31260"],
+          },
+        },
+      ],
       tooltip: {
         trigger: "axis",
         formatter(params) {
           const { marker, name, data } = (params as CallbackDataParams[])[0]!;
           return `${new Date(
             parseInt(name),
-          ).toLocaleTimeString()} <br/ > <p style="display:flex;justify-content:space-between;align-items:center;">${marker} ${data}%</p>`;
+          ).toLocaleTimeString()} <br/ > <p style="display:flex;justify-content:space-between;align-items:center;">${marker} ${data}M</p>`;
         },
       },
       grid: {
@@ -98,11 +124,6 @@ export const Content: React.FC<{}> = () => {
         right: "4%",
         bottom: "3%",
         containLabel: true,
-      },
-      toolbox: {
-        feature: {
-          saveAsImage: {},
-        },
       },
       xAxis: {
         type: "category" as const,
@@ -117,21 +138,23 @@ export const Content: React.FC<{}> = () => {
       yAxis: {
         type: "value",
         min: 0,
-        max({ max }) {
-          return Math.min(max + 2, 100);
+        max({ max: curMax }) {
+          return Math.min(curMax + 20, max);
         },
         axisLabel: {
-          formatter: "{value}%",
+          formatter: "{value}M",
         },
       },
       series: [
         {
           type: "line",
           smooth: true,
-          // areaStyle: {},
-          itemStyle: {
-            color: "#333",
+          areaStyle: {
+            opacity: 0.3,
           },
+          // itemStyle: {
+          //   color: "#333",
+          // },
           data: yData,
         },
       ],
